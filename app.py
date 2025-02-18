@@ -89,7 +89,7 @@ def close_chat(driver):
         logging.info("Exited chat")
         return True
     except Exception as e:
-        logging.error(e)
+        logging.error({str(e)})
         return False
 
 def check_login(driver, timeout=30):
@@ -169,23 +169,87 @@ def send_message(driver, message):
         logging.error(f"Failed to send message: {str(e)}")
         return False
 
+def search(driver, contact_to_search):
+    """
+    Search for a specific contact and open the conversation
+
+    Args:
+    contact_to_search = Contact to search duhhh
+    """
+
+    try:
+        logging.info("Looking for search input box...")
+        # Wait for the search input box
+        search_box = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((
+                By.CLASS_NAME, "selectable-text"
+            ))
+        )
+
+        time.sleep(3)
+        search_box.clear()
+        logging.info(f"Searching for {contact_to_search}")
+        search_box.send_keys(contact_to_search)
+        time.sleep(2)
+        select_first_search(driver)
+
+    except Exception as e :
+        logging.error({str(e)})
+
+
+def close_search_box(driver):
+    """
+    Close the search box
+    """
+    try:
+        logging.info("Closing search box...")
+        close_search = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((
+                    By.CSS_SELECTOR, "[aria-label= 'Cancel search']"
+                ))
+            )
+        time.sleep(2)
+        close_search.click()
+        logging.info("Search box closed!")
+    except Exception as e:
+        logging.error({str(e)})
+    
+def select_first_search(driver):
+    """
+    Click on the first searched conversation
+    """
+    try:
+        logging.info("Opening conversation for searched")
+        searched_contact = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((
+                By.CLASS_NAME, 'matched-text'
+            ))
+        )
+        
+        searched_contact.click()
+        logging.info("Searched conversation opened!")
+        time.sleep(5)
+        
+    except Exception as e:
+        logging.error({str(e)})
+
 def get_contact_details(driver):
     """
     Extracts the contact details of the current chat, gets the name if the contact is saved, or the contact number if the contact is not saved
 
     Returns:
-    The contact number of the current selected chat
+    The name of the current selected chat
     """
 
     try:
         logging.info("Extracting contact details...")
-        phone_number_element = driver.find_element(By.XPATH, '//*[@id="main"]/header/div[2]/div/div/div/span')
-        phone_number = phone_number_element.text
-        logging.info(f"Contact Number: {phone_number}")
-        return phone_number
+        name_element = driver.find_element(By.XPATH, '//*[@id="main"]/header/div[2]/div/div/div/span')
+        contact_name = name_element.text
+        logging.info(f"Contact Number: {contact_name}")
+        return contact_name
 
     except NoSuchElementException as e:
-        logging.error("Cannot find element", e)
+        logging.error("Cannot find element", {str(e)})
         return False
 
     except Exception:
@@ -331,7 +395,6 @@ def handle_conversation(driver):
     close_chat(driver)  # Close the chat if max retries exceeded
         
 MAX_RETRIES = 3
-
 def handle_new_issue(driver):
     """
     Handle new issue flow while ensuring proper wait time for user response.
@@ -383,7 +446,7 @@ def handle_new_issue(driver):
                                            issue_description=issue_description)
 
                 if ticket_num:
-                    send_message(driver, f"Thank you for providing the details.\n"
+                    send_message(driver, "Thank you for providing the details.\n"
                                          f"A ticket has been created for you.\n"
                                          f"Your ticket number is {ticket_num}.")
                     send_message(driver, "Please wait while we arrange for IT support to contact you.")
@@ -391,6 +454,16 @@ def handle_new_issue(driver):
                     send_message(driver, "Sorry, we encountered an error while creating your ticket. Please try again later.")
                 
                 close_chat(driver)
+                MESSAGE = (
+                f"{contact_num} is in need of help! \n"
+                f"Category: {issue_category} \n"
+                f"Description of issue: {issue_description} \n"
+                f"Ticket No: {ticket_num} \n"
+                "Please send assistance"
+                )
+
+                click_unread_button(driver)
+                notify_group(driver,MESSAGE)
                 return  # Exit function after successful handling
 
             else:
@@ -409,13 +482,38 @@ def handle_existing_issue(driver,contact_num):
     """
     Handle existing issue flow
     """
+    name = get_contact_details(driver)
     df = pd.read_excel("Examply.xlsx")
     filtered_df = df[(df["Contact Details"] == contact_num) & (df["Status"] == "Ongoing")]
     MESSAGE = (f"You currently have {len(filtered_df)} unresolved ticket \n"
-               "Please hold on while we get an IT support to assist you \n")
+               f"{filtered_df['Ticket No'].to_list()} \n"
+               "Can you please tell us which ticket are you referring to?\n"
+               "Please reply the ticket no only, Thank you")
     send_message(driver, MESSAGE)
+    reply = wait_for_user_reply(driver,40)
     logging.info("Sent msg to update current number of unresolved ticket for the user")
+    MESSAGE = ("Thank you for your reply \n"
+               "Please hold which we get an IT support to assist you")
+    send_message(driver, MESSAGE)
     close_chat(driver)
+    click_unread_button(driver)
+
+    MESSAGE = (f"{name} has contacted me to ask about ticket no:{reply} \n"
+               "Please send someone to assist")
+    notify_group(driver, MESSAGE)
+    return
+
+def notify_group(driver,message):
+    """
+    Send notification to someone 
+    """
+    GROUP_TO_NOTIFY = "Allen"
+    search(driver,GROUP_TO_NOTIFY)
+    time.sleep(5)
+    send_message(driver,message)
+    close_chat(driver)
+    time.sleep(1)
+    close_search_box(driver)
 
 CATEGORY_MAP = {
     "1": "Hardware",
@@ -452,7 +550,7 @@ def main():
                 if select_first_unread(driver):
                     # Process the conversation (your existing message handling code)
                     handle_conversation(driver)
-                    click_unread_button(driver)
+                    # click_unread_button(driver)
                     # After handling the conversation, check for unread messages again
                     logging.info("Checking for more unread messages...")
                     

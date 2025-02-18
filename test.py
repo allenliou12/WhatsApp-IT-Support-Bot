@@ -89,7 +89,7 @@ def close_chat(driver):
         logging.info("Exited chat")
         return True
     except Exception as e:
-        logging.error(e)
+        logging.error({str(e)})
         return False
 
 def check_login(driver, timeout=30):
@@ -179,7 +179,7 @@ def search(driver, contact_to_search):
 
     try:
         logging.info("Looking for search input box...")
-        # Wait for the message input box
+        # Wait for the search input box
         search_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((
                 By.CLASS_NAME, "selectable-text"
@@ -194,7 +194,7 @@ def search(driver, contact_to_search):
         select_first_search(driver)
 
     except Exception as e :
-        logging.error(e)
+        logging.error({str(e)})
 
 
 def close_search_box(driver):
@@ -208,10 +208,11 @@ def close_search_box(driver):
                     By.CSS_SELECTOR, "[aria-label= 'Cancel search']"
                 ))
             )
+        time.sleep(2)
         close_search.click()
         logging.info("Search box closed!")
     except Exception as e:
-        logging.error(e)
+        logging.error({str(e)})
     
 def select_first_search(driver):
     """
@@ -230,7 +231,7 @@ def select_first_search(driver):
         time.sleep(5)
         
     except Exception as e:
-        logging.error(e)
+        logging.error({str(e)})
 
 def get_contact_details(driver):
     """
@@ -248,7 +249,7 @@ def get_contact_details(driver):
         return contact_name
 
     except NoSuchElementException as e:
-        logging.error("Cannot find element", e)
+        logging.error("Cannot find element", {str(e)})
         return False
 
     except Exception:
@@ -457,7 +458,7 @@ def handle_new_issue(driver):
                 f"{contact_num} is in need of help! \n"
                 f"Category: {issue_category} \n"
                 f"Description of issue: {issue_description} \n"
-                f"Ticket No: {ticket_num}"
+                f"Ticket No: {ticket_num} \n"
                 "Please send assistance"
                 )
 
@@ -481,18 +482,24 @@ def handle_existing_issue(driver,contact_num):
     """
     Handle existing issue flow
     """
+    name = get_contact_details(driver)
     df = pd.read_excel("Examply.xlsx")
     filtered_df = df[(df["Contact Details"] == contact_num) & (df["Status"] == "Ongoing")]
     MESSAGE = (f"You currently have {len(filtered_df)} unresolved ticket \n"
                f"{filtered_df['Ticket No'].to_list()} \n"
                "Can you please tell us which ticket are you referring to?\n"
-               "Please hold on while we get an IT support to assist you \n")
+               "Please reply the ticket no only, Thank you")
     send_message(driver, MESSAGE)
+    reply = wait_for_user_reply(driver,40)
     logging.info("Sent msg to update current number of unresolved ticket for the user")
+    MESSAGE = ("Thank you for your reply \n"
+               "Please hold which we get an IT support to assist you")
+    send_message(driver, MESSAGE)
     close_chat(driver)
     click_unread_button(driver)
 
-    MESSAGE = 
+    MESSAGE = (f"{name} has contacted me to ask about ticket no:{reply} \n"
+               "Please send someone to assist")
     notify_group(driver, MESSAGE)
     return
 
