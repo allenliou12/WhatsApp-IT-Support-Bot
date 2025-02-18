@@ -32,7 +32,8 @@ cd WhatsApp-Bot
 
 2. Install required packages
 ```bash
-pip install -r requirements.txt
+pip install pipenv
+pipenv install
 ```
 
 3. Create an Excel file named "Examply.xlsx" in the project directory with the following columns:
