@@ -196,7 +196,6 @@ def search(driver, contact_to_search):
     except Exception as e :
         logging.error({str(e)})
 
-
 def close_search_box(driver):
     """
     Close the search box
@@ -346,53 +345,57 @@ def handle_conversation(driver):
     """
     Handles the initial conversation and directs the user accordingly.
     """
-    MESSAGE = ("Thanks for contacting TH IT Support! Could you please let us know what you need help with?\n\n"
-               " Reply 1️⃣ for a **new issue**\n"
-               " Reply 2️⃣ for an **update on an existing issue**\n"
-               " Type 'exit' to cancel this request.")
-    logging.info("Sending template msg to check if new or old issue")
-    send_message(driver, MESSAGE)
+    name = get_contact_details(driver)
+    if name == "TH IT Allen Liou":
+        close_chat(driver)
+    else:
+        MESSAGE = ("Thanks for contacting TH IT Support! Could you please let us know what you need help with?\n\n"
+                " Reply 1️⃣ for a **new issue**\n"
+                " Reply 2️⃣ for an **update on an existing issue**\n"
+                " Type 'exit' to cancel this request.")
+        logging.info("Sending template msg to check if new or old issue")
+        send_message(driver, MESSAGE)
 
-    # last_seen_msg = wait_for_user_reply(driver)  # Store last seen message
-    start_time = time.time()
-    retries = 0
+        # last_seen_msg = wait_for_user_reply(driver)  # Store last seen message
+        start_time = time.time()
+        retries = 0
 
-    while retries < MAX_RETRIES:
-        reply = wait_for_user_reply(driver, timeout=30)  # Wait for a response
+        while retries < MAX_RETRIES:
+            reply = wait_for_user_reply(driver, timeout=30)  # Wait for a response
 
-        if reply:  
-            if reply.lower() == "exit":
-                send_message(driver, "Your request has been canceled. Let us know if you need anything else.")
-                close_chat(driver)
-                logging.info("Conversation exited due to user request")
-                return  # Exit conversation
-                
-            elif reply == "1":
-                logging.info("New issue report")
-                handle_new_issue(driver)
-                return  # Exit after handling
-
-            elif reply == "2":
-                logging.info("Assisting to check for existing issue")
-                handle_existing_issue(driver,get_contact_details(driver))
-                return  # Exit after handling
-
-            else:
-                retries += 1
-                if retries < MAX_RETRIES:
-                    send_message(driver, f"Invalid response. You have {MAX_RETRIES - retries} attempts left. Please reply '1' for a **new issue**, '2' for an **update**, or 'exit' to cancel.")
-                else:
-                    send_message(driver, "We couldn't understand your response. Please restart the conversation if you still need assistance.")
+            if reply:  
+                if reply.lower() == "exit":
+                    send_message(driver, "Your request has been canceled. Let us know if you need anything else.")
                     close_chat(driver)
-                    logging.info("Conversation ended due to user sending messages in wrong format after max retries")
-                    return  # Exit after max retries
+                    logging.info("Conversation exited due to user request")
+                    return  # Exit conversation
+                    
+                elif reply == "1":
+                    logging.info("New issue report")
+                    handle_new_issue(driver)
+                    return  # Exit after handling
 
-        elif time.time() - start_time > 60:
-            send_message(driver, "We haven't received a response. Please reply '1' for a new issue, '2' for an update, or 'exit' to cancel.")
-            start_time = time.time()  # Reset timer to avoid spamming
-            retries += 1
+                elif reply == "2":
+                    logging.info("Assisting to check for existing issue")
+                    handle_existing_issue(driver,get_contact_details(driver))
+                    return  # Exit after handling
 
-    close_chat(driver)  # Close the chat if max retries exceeded
+                else:
+                    retries += 1
+                    if retries < MAX_RETRIES:
+                        send_message(driver, f"Invalid response. You have {MAX_RETRIES - retries} attempts left. Please reply '1' for a **new issue**, '2' for an **update**, or 'exit' to cancel.")
+                    else:
+                        send_message(driver, "We couldn't understand your response. Please restart the conversation if you still need assistance.")
+                        close_chat(driver)
+                        logging.info("Conversation ended due to user sending messages in wrong format after max retries")
+                        return  # Exit after max retries
+
+            elif time.time() - start_time > 60:
+                send_message(driver, "We haven't received a response. Please reply '1' for a new issue, '2' for an update, or 'exit' to cancel.")
+                start_time = time.time()  # Reset timer to avoid spamming
+                retries += 1
+
+            close_chat(driver)  # Close the chat if max retries exceeded
         
 MAX_RETRIES = 3
 def handle_new_issue(driver):
@@ -513,7 +516,7 @@ def notify_group(driver,message):
     send_message(driver,message)
     close_chat(driver)
     time.sleep(1)
-    close_search_box(driver)
+    # close_search_box(driver)
 
 CATEGORY_MAP = {
     "1": "Hardware",
