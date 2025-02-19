@@ -6,6 +6,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException
+from dotenv import load_dotenv
+import mysql.connector
 import time
 import pandas as pd
 from datetime import datetime
@@ -42,6 +44,30 @@ def initialize_driver():
         return driver
     except Exception as e:
         logging.error(f"Failed to initialize driver: {str(e)}")
+        return None
+    
+def connect_to_db():
+    """
+    Establish a database connection.
+    
+    Returns a database connection if successful
+    """
+    load_dotenv()
+    host = os.getenv("HOST")
+    user = os.getenv("USER")
+    password = os.getenv("PASSWORD")
+    database = os.getenv("DATABASE")
+    try:
+        conn = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database
+        )
+        logging.info(f"Connected to {database}")
+        return conn
+    except mysql.connector.Error as err:
+        logging.error(f"Database connection error: {err}")
         return None
     
 def wait_for_user_reply(driver, timeout=30):
@@ -174,16 +200,13 @@ def search(driver, contact_to_search):
     Search for a specific contact and open the conversation
 
     Args:
-    contact_to_search = Contact to search duhhh
+    contact_to_search = Contact to search
     """
-
     try:
         logging.info("Looking for search input box...")
         # Wait for the search input box
         search_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((
-                By.CLASS_NAME, "selectable-text"
-            ))
+            EC.presence_of_element_located((By.CLASS_NAME, "selectable-text"))
         )
 
         time.sleep(3)
@@ -191,10 +214,27 @@ def search(driver, contact_to_search):
         logging.info(f"Searching for {contact_to_search}")
         search_box.send_keys(contact_to_search)
         time.sleep(2)
-        select_first_search(driver)
 
-    except Exception as e :
-        logging.error({str(e)})
+        #Check if search results are present BEFORE clicking
+        try:
+            search_results = driver.find_elements(By.CLASS_NAME, "matched-text") 
+            if not search_results:
+                logging.warning(f"No search results found for '{contact_to_search}'")
+                close_search_box(driver)  # Close search if no results
+                return False
+            
+            logging.info("Attempting to click the first search result...")
+            select_first_search(driver)  # Function that clicks on the first result
+            return True  # Success
+
+        except Exception as e:
+            logging.error(f"Failed to select search result: {e}")
+            close_search_box(driver)  
+            return False  
+
+    except Exception as e:
+        logging.error(f"Search failed: {e}")
+        return False
 
 def close_search_box(driver):
     """
@@ -255,90 +295,76 @@ def get_contact_details(driver):
         logging.error("Couldn't fetch the phone number. It might be hidden or the XPath is outdated.")
         return False
 
-def get_next_ticket_number(excel_file):
+def get_next_ticket_number():
     """
-    Extract the last ticket number from the excel file and increment it
+    Fetch the latest ticket number from the database and increment it.
 
     Returns:
-    A number based on the last created ticket
+        A string representing the next ticket number in the format "#001".
     """
+    conn = connect_to_db()
+
     try:
-        # Read the existing Excel file
-        existing_excel = pd.read_excel(excel_file)
-        
-        # Check if the "Ticket No" column exists
-        if "Ticket No" not in existing_excel.columns:
-            return 1  # If no tickets exist, start from 1
-        
-        # Extract the last ticket number and increment it
-        last_ticket_number = existing_excel["Ticket No"].iloc[-1]  # Get the last ticket number
-        last_ticket_number = int(last_ticket_number.lstrip('#'))  # Remove the '#' and convert to int
-        return last_ticket_number + 1
-    
-    except FileNotFoundError:
-        logging.warning(f"Error: The file {excel_file} does not exist.")
-        return 1  # Start from 1 if file doesn't exist
-    
-    except ValueError:
-        logging.warning("Error: There is invalid data in the 'Ticket No' column.")
-        return 1  # Start from 1 in case of invalid data
-    
+        cursor = conn.cursor()
+        cursor.execute("SELECT ticket_no FROM tickets ORDER BY ticket_no DESC LIMIT 1")
+        last_ticket = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if last_ticket:
+            last_ticket_no = last_ticket[0]  # Assuming ticket_no is stored as a string like '#001'
+            next_ticket_no = f"#{int(last_ticket_no[1:]) + 1:03d}"  # Extract number, increment, format
+        else:
+            next_ticket_no = "#001"  # First ticket if no records exist
+
+        return next_ticket_no
+
+    except mysql.connector.Error as err:
+        logging.error(f"Database query error: {err}")
+        return "#001"
+
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
-        return 1  # Start from 1 in case of any other errors
+        logging.error(f"Unexpected error: {e}")
+        return "#001"
 
-def create_ticket(contact_number, issue_category, issue_description):
+def create_ticket(contact_details, issue_category, description):
     """
-    Creates a ticket and saves it to an Excel file with auto-adjusted column widths.
+    Inserts a new ticket into the database.
     """
-    EXISTING_FILE = os.path.join(script_dir, "Examply.xlsx")
-    current_time = datetime.now()
+    conn = connect_to_db()
+    if not conn:
+        logging.error("Database connection failed. Ticket not created.")
+        return None
 
     try:
-        logging.info("Creating ticket....")
+        cursor = conn.cursor()
+
         # Get the next ticket number
-        n = get_next_ticket_number(EXISTING_FILE)
-        ticket_num = f"#{n:05d}"  # Format with leading zeros
+        ticket_no = get_next_ticket_number()
+        current_time = datetime.now()
+        # Insert ticket into the database
+        query = """
+        INSERT INTO tickets (ticket_no, contact_details, issue_category, description, status, date_created)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        values = (ticket_no, contact_details, issue_category, description, "Ongoing", current_time.strftime("%Y-%m-%d %H:%M:%S"))
 
-        # Create the new ticket
-        new_ticket = {
-            "Ticket No": ticket_num,
-            "Contact Details": contact_number,
-            "Issue": issue_category,
-            "Description": issue_description,
-            "Status": "Ongoing",
-            "Date created": current_time.strftime("%d/%m/%Y, %H:%M")
-        }
+        cursor.execute(query, values)
+        conn.commit()
 
-        # Read existing Excel file or create a new DataFrame
-        existing_excel = pd.read_excel(EXISTING_FILE)
+        logging.info(f"Ticket {ticket_no} created successfully.")
 
-        # Append the new ticket
-        new_row = pd.DataFrame([new_ticket])
-        updated_excel = pd.concat([existing_excel, new_row], ignore_index=True)
+        cursor.close()
+        conn.close()
 
-        # Save the updated DataFrame with auto column width
-        with pd.ExcelWriter(EXISTING_FILE, engine="openpyxl") as writer:
-            updated_excel.to_excel(writer, index=False, sheet_name="Tickets")
-            worksheet = writer.sheets["Tickets"]
+        return ticket_no  # Returning the created ticket number
 
-            # Auto-adjust column widths
-            for col in worksheet.columns:
-                max_length = 0
-                col_letter = col[0].column_letter  # Get column letter
-                for cell in col:
-                    try:
-                        if cell.value:
-                            max_length = max(max_length, len(str(cell.value)))
-                    except:
-                        pass
-                worksheet.column_dimensions[col_letter].width = max_length + 2  # Add padding
-
-        logging.info(f"Ticket created for {contact_number}, ticket num: {ticket_num}")
-        return ticket_num  # Return the generated ticket number
+    except mysql.connector.Error as err:
+        logging.error(f"Database query error: {err}")
+        return False
 
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
+        logging.error(f"Unexpected error: {e}")
         return False
 
 def handle_conversation(driver):
@@ -346,17 +372,16 @@ def handle_conversation(driver):
     Handles the initial conversation and directs the user accordingly.
     """
     name = get_contact_details(driver)
-    if name == "TH IT Allen Liou":
+    if name == "TH IT Allen Liou": #To be changed later to whatever contact/group to ignore
         close_chat(driver)
     else:
         MESSAGE = ("Thanks for contacting TH IT Support! Could you please let us know what you need help with?\n"
                 " Reply 1️⃣ for a **new issue**\n"
                 " Reply 2️⃣ for an **update on an existing issue**\n"
-                " Type 'exit' to cancel this request.")
+                " Reply 'exit' to cancel this request.\n")
         logging.info("Sending template msg to check if new or old issue")
         send_message(driver, MESSAGE)
 
-        # last_seen_msg = wait_for_user_reply(driver)  # Store last seen message
         start_time = time.time()
         retries = 0
 
@@ -410,7 +435,7 @@ def handle_new_issue(driver):
                "3️⃣ for **ACCOUNT/PASSWORD** Issues\n"
                "4️⃣ for **SOFTWARE** Issues\n"
                "5️⃣ for **OTHERS**\n"
-               "or Type 'exit' to cancel this request.")
+               "or Type 'exit' to cancel this request.\n")
     
     logging.info("Sending template msg to get category of issue")
     send_message(driver, MESSAGE)
@@ -444,25 +469,25 @@ def handle_new_issue(driver):
 
                 # Create ticket with category and description
                 contact_num = get_contact_details(driver)
-                ticket_num = create_ticket(contact_number=contact_num, 
+                ticket_num = create_ticket(contact_details=contact_num, 
                                            issue_category=issue_category, 
-                                           issue_description=issue_description)
+                                           description=issue_description)
 
                 if ticket_num:
                     send_message(driver, "Thank you for providing the details.\n"
                                          f"A ticket has been created for you.\n"
-                                         f"Your ticket number is {ticket_num}.")
-                    send_message(driver, "Please wait while we arrange for IT support to contact you.")
+                                         f"Your ticket number is {ticket_num}.\n"
+                                         "Please wait while we arrange for IT support to contact you.\n")
                 else:
                     send_message(driver, "Sorry, we encountered an error while creating your ticket. Please try again later.")
                 
                 close_chat(driver)
                 MESSAGE = (
-                f"{contact_num} is in need of help! \n"
-                f"Category: {issue_category} \n"
-                f"Description of issue: {issue_description} \n"
-                f"Ticket No: {ticket_num} \n"
-                "Please send assistance"
+                f"{contact_num} is in need of help!\n"
+                f"Category: {issue_category}\n"
+                f"Description of issue: {issue_description}\n"
+                f"Ticket No: {ticket_num}\n"
+                "Please send assistance\n"
                 )
 
                 click_unread_button(driver)
@@ -491,18 +516,18 @@ def handle_existing_issue(driver,contact_num):
     MESSAGE = (f"You currently have {len(filtered_df)} unresolved ticket \n"
                f"{filtered_df['Ticket No'].to_list()} \n"
                "Can you please tell us which ticket are you referring to?\n"
-               "Please reply the ticket no only, Thank you")
+               "Please reply the ticket no only, Thank you \n")
     send_message(driver, MESSAGE)
     reply = wait_for_user_reply(driver,40)
     logging.info("Sent msg to update current number of unresolved ticket for the user")
     MESSAGE = ("Thank you for your reply \n"
-               "Please hold which we get an IT support to assist you")
+               "Please hold which we get an IT support to assist you \n")
     send_message(driver, MESSAGE)
     close_chat(driver)
     click_unread_button(driver)
 
     MESSAGE = (f"{name} has contacted me to ask about ticket no:{reply} \n"
-               "Please send someone to assist")
+               "Please send someone to assist \n")
     notify_group(driver, MESSAGE)
     return
 
@@ -511,12 +536,14 @@ def notify_group(driver,message):
     Send notification to someone 
     """
     GROUP_TO_NOTIFY = "Allen"
-    search(driver,GROUP_TO_NOTIFY)
-    time.sleep(5)
-    send_message(driver,message)
-    close_chat(driver)
-    time.sleep(1)
-    # close_search_box(driver)
+    if search(driver,GROUP_TO_NOTIFY):
+        time.sleep(5)
+        send_message(driver,message)
+        close_chat(driver)
+        time.sleep(1)
+    else:
+        close_search_box(driver)
+
 
 CATEGORY_MAP = {
     "1": "Hardware",
