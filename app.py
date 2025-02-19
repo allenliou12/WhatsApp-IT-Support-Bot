@@ -349,7 +349,7 @@ def handle_conversation(driver):
     if name == "TH IT Allen Liou":
         close_chat(driver)
     else:
-        MESSAGE = ("Thanks for contacting TH IT Support! Could you please let us know what you need help with?\n\n"
+        MESSAGE = ("Thanks for contacting TH IT Support! Could you please let us know what you need help with?\n"
                 " Reply 1️⃣ for a **new issue**\n"
                 " Reply 2️⃣ for an **update on an existing issue**\n"
                 " Type 'exit' to cancel this request.")

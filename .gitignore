@@ -1,6 +1,8 @@
 # Project specific files
 Examply.xlsx
 support_bot_test.log
+playground.py
+playground2.py
 
 # Python
 __pycache__/

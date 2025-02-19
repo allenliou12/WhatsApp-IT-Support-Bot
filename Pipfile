@@ -8,6 +8,7 @@ selenium = "*"
 webdriver-manager = "*"
 openpyxl = "*"
 pandas = "*"
+mysql-connector-python = "*"
 
 [dev-packages]
 
