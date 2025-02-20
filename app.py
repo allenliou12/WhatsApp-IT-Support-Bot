@@ -99,6 +99,22 @@ def wait_for_user_reply(driver, timeout=30):
 
     return None  # No new message received
 
+def click_all_button(driver):
+    """
+    Click the all button to go to the all messages tab
+    """
+    try:
+        logging.info("Looking for all button...")
+        time.sleep(5)
+        check_input = driver.find_element(By.XPATH, "//*[@id='all-filter']")
+        logging.info("All button found!")
+        check_input.click()
+        return True
+    
+    except Exception as e:
+        logging.error(f"Failed to click the all button{str(e)}")
+        return False 
+
 def close_chat(driver):
     """
     Close the current conversation
@@ -203,6 +219,7 @@ def search(driver, contact_to_search):
     contact_to_search = Contact to search
     """
     try:
+        click_all_button(driver)
         logging.info("Looking for search input box...")
         # Wait for the search input box
         search_box = WebDriverWait(driver, 10).until(
@@ -220,7 +237,8 @@ def search(driver, contact_to_search):
             search_results = driver.find_elements(By.CLASS_NAME, "matched-text") 
             if not search_results:
                 logging.warning(f"No search results found for '{contact_to_search}'")
-                close_search_box(driver)  # Close search if no results
+                close_search_box(driver)
+                click_unread_button(driver)  # Close search if no results
                 return False
             
             logging.info("Attempting to click the first search result...")
@@ -295,38 +313,6 @@ def get_contact_details(driver):
         logging.error("Couldn't fetch the phone number. It might be hidden or the XPath is outdated.")
         return False
 
-def get_next_ticket_number():
-    """
-    Fetch the latest ticket number from the database and increment it.
-
-    Returns:
-        A string representing the next ticket number in the format "#001".
-    """
-    conn = connect_to_db()
-
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT ticket_no FROM tickets ORDER BY ticket_no DESC LIMIT 1")
-        last_ticket = cursor.fetchone()
-        cursor.close()
-        conn.close()
-
-        if last_ticket:
-            last_ticket_no = last_ticket[0]  # Assuming ticket_no is stored as a string like '#001'
-            next_ticket_no = f"#{int(last_ticket_no[1:]) + 1:03d}"  # Extract number, increment, format
-        else:
-            next_ticket_no = "#001"  # First ticket if no records exist
-
-        return next_ticket_no
-
-    except mysql.connector.Error as err:
-        logging.error(f"Database query error: {err}")
-        return "#001"
-
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        return "#001"
-
 def create_ticket(contact_details, issue_category, description):
     """
     Inserts a new ticket into the database.
@@ -339,19 +325,17 @@ def create_ticket(contact_details, issue_category, description):
     try:
         cursor = conn.cursor()
 
-        # Get the next ticket number
-        ticket_no = get_next_ticket_number()
         current_time = datetime.now()
         # Insert ticket into the database
         query = """
-        INSERT INTO tickets (ticket_no, contact_details, issue_category, description, status, date_created)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO tickets (contact_details, issue_category, description, status, date_created)
+        VALUES (%s, %s, %s, %s, %s)
         """
-        values = (ticket_no, contact_details, issue_category, description, "Ongoing", current_time.strftime("%Y-%m-%d %H:%M:%S"))
+        values = (contact_details, issue_category, description, "Ongoing", current_time.strftime("%Y-%m-%d %H:%M:%S"))
 
         cursor.execute(query, values)
         conn.commit()
-
+        ticket_no = cursor.lastrowid 
         logging.info(f"Ticket {ticket_no} created successfully.")
 
         cursor.close()
@@ -382,7 +366,6 @@ def handle_conversation(driver):
         logging.info("Sending template msg to check if new or old issue")
         send_message(driver, MESSAGE)
 
-        time.sleep(2)
         start_time = time.time()
         retries = 0
 
@@ -474,7 +457,7 @@ def handle_new_issue(driver):
                 if ticket_num:
                     send_message(driver, "Thank you for providing the details.\n"
                                          f"A ticket has been created for you.\n"
-                                         f"Your ticket number is {ticket_num}.\n"
+                                         f"Your ticket number is #{ticket_num}.\n"
                                          "Please wait while we arrange for IT support to contact you.\n")
                 else:
                     send_message(driver, "Sorry, we encountered an error while creating your ticket. Please try again later.")
@@ -488,7 +471,6 @@ def handle_new_issue(driver):
                 "Please send assistance\n"
                 )
 
-                click_unread_button(driver)
                 notify_group(driver,MESSAGE)
                 return  # Exit function after successful handling
 
@@ -504,30 +486,84 @@ def handle_new_issue(driver):
 
     close_chat(driver)  # Close the chat if max retries exceeded
 
-def handle_existing_issue(driver,contact_num):
+def handle_existing_issue(driver, contact_num):
     """
-    Handle existing issue flow
+    Handle an existing issue query from the user by checking the database.
     """
-    name = get_contact_details(driver)
-    df = pd.read_excel("Examply.xlsx")
-    filtered_df = df[(df["Contact Details"] == contact_num) & (df["Status"] == "Ongoing")]
-    MESSAGE = (f"You currently have {len(filtered_df)} unresolved ticket \n"
-               f"{filtered_df['Ticket No'].to_list()} \n"
-               "Can you please tell us which ticket are you referring to?\n"
-               "Please reply the ticket no only, Thank you \n")
-    send_message(driver, MESSAGE)
-    reply = wait_for_user_reply(driver,40)
-    logging.info("Sent msg to update current number of unresolved ticket for the user")
-    MESSAGE = ("Thank you for your reply \n"
-               "Please hold which we get an IT support to assist you \n")
-    send_message(driver, MESSAGE)
-    close_chat(driver)
-    click_unread_button(driver)
+    conn = connect_to_db()
+    if not conn:
+        logging.error("Database connection failed. Cannot retrieve tickets.")
+        send_message(driver, "Sorry, we are unable to retrieve your ticket details at the moment. Please try again later.")
+        close_chat(driver)
+        return
 
-    MESSAGE = (f"{name} has contacted me to ask about ticket no:{reply} \n"
-               "Please send someone to assist \n")
-    notify_group(driver, MESSAGE)
-    return
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        # Fetch user's ongoing tickets
+        query = "SELECT ticket_no FROM tickets WHERE contact_details = %s AND status = 'Ongoing'"
+        cursor.execute(query, (contact_num,))
+        tickets = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        if not tickets:
+            send_message(driver, "You currently have no unresolved tickets. Let us know if you need further assistance.")
+            close_chat(driver)
+            return
+
+        # Convert ticket numbers to strings and format with #
+        ticket_numbers_list = [f"#{ticket['ticket_no']}" for ticket in tickets]
+        ticket_numbers = ", ".join(ticket_numbers_list)
+
+        MESSAGE = (f"You currently have {len(tickets)} unresolved ticket(s): {ticket_numbers} \n"
+                   "Please reply with the ticket number you are referring to.\n"
+                   "Example: #003\n"
+                   "Reply 'exit' to cancel. \n")
+
+        send_message(driver, MESSAGE)
+
+        retry_attempts = 3  # Allow up to 3 retries
+
+        while retry_attempts > 0:
+            reply = wait_for_user_reply(driver, timeout=40)
+
+            if not reply or reply.lower() == "exit":
+                send_message(driver, "Your request has been canceled. Let us know if you need anything else.")
+                close_chat(driver)
+                return
+
+            if reply in ticket_numbers_list:
+                send_message(driver, f"Thank you! We are notifying IT support about your ticket {reply}.")
+
+                # Notify support team
+                MESSAGE = (f"{contact_num} has asked for an update on ticket {reply}.\n"
+                           "Please check and assist them.")
+                close_chat(driver)
+                notify_group(driver, MESSAGE)
+                return  # Exit function after a successful match
+
+            else:
+                retry_attempts -= 1
+                if retry_attempts > 0:
+                    send_message(driver, f"The ticket number you provided is not found. Please try again ({retry_attempts} attempts left).\n"
+                                         "Example: #003\n"
+                                         "Reply 'exit' to cancel.")
+                else:
+                    send_message(driver, "You have exceeded the maximum number of attempts. Please start over if you need assistance.")
+                    close_chat(driver)
+                    return
+
+    except mysql.connector.Error as err:
+        logging.error(f"Database query error: {err}")
+        send_message(driver, "We encountered a database issue while retrieving your ticket. Please try again later.")
+        close_chat(driver)
+
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        send_message(driver, "Something went wrong. Please try again later.")
+        close_chat(driver)
 
 def notify_group(driver,message):
     """
@@ -565,13 +601,11 @@ def main():
 
         check_login(driver)
         logging.info("Waiting for page to load completely...")
-        time.sleep(5)
-
+        time.sleep(10)
+        # First check for unread messages
+        click_unread_button(driver)
         while True:
             try:
-                # First check for unread messages
-                click_unread_button(driver)
-                
                 # Try to select first unread conversation
                 if select_first_unread(driver):
                     # Process the conversation (your existing message handling code)
@@ -583,7 +617,7 @@ def main():
                 else:
                     logging.info("No unread conversations found, waiting before next check...")
                     time.sleep(random.randint(2, 30))
-                    click_unread_button(driver)
+                    # click_unread_button(driver)
                              
             except NoSuchElementException as e:
                 logging.error(f"Element not found: {str(e)}")
