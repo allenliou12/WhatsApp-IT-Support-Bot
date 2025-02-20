@@ -90,7 +90,7 @@ def wait_for_user_reply(driver, timeout=30):
     
     while time.time() - start_time < timeout:
         logging.info("Waiting for user reply...")
-        time.sleep(1)  # check more frequently
+        time.sleep(2)  # check more frequently
         messages = driver.find_elements(By.XPATH, "//div[contains(@class, 'message-in')]//span[contains(@class, 'selectable-text')]")
         if len(messages) > initial_count:
             new_msg = messages[-1].text.strip()
@@ -382,6 +382,7 @@ def handle_conversation(driver):
         logging.info("Sending template msg to check if new or old issue")
         send_message(driver, MESSAGE)
 
+        time.sleep(2)
         start_time = time.time()
         retries = 0
 
@@ -416,11 +417,8 @@ def handle_conversation(driver):
                         return  # Exit after max retries
 
             elif time.time() - start_time > 60:
-                send_message(driver, "We haven't received a response. Please reply '1' for a new issue, '2' for an update, or 'exit' to cancel.")
-                start_time = time.time()  # Reset timer to avoid spamming
-                retries += 1
-
-            close_chat(driver)  # Close the chat if max retries exceeded
+                send_message(driver, "We haven't received a response. Exiting chat...")
+                close_chat(driver)  # Close the chat if max retries exceeded
         
 MAX_RETRIES = 3
 def handle_new_issue(driver):
@@ -541,8 +539,6 @@ def notify_group(driver,message):
         send_message(driver,message)
         close_chat(driver)
         time.sleep(1)
-    else:
-        close_search_box(driver)
 
 
 CATEGORY_MAP = {
