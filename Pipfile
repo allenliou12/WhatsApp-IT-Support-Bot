@@ -7,9 +7,9 @@ name = "pypi"
 selenium = "*"
 webdriver-manager = "*"
 openpyxl = "*"
-pandas = "*"
-mysql-connector-python = "*"
 python-dotenv = "*"
+pymysql = "*"
+mysql-connector-python = "*"
 
 [dev-packages]
 
