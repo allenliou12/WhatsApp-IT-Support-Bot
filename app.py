@@ -9,7 +9,6 @@ from selenium.common.exceptions import NoSuchElementException
 from dotenv import load_dotenv
 import mysql.connector
 import time
-import pandas as pd
 from datetime import datetime
 import sys
 import random
