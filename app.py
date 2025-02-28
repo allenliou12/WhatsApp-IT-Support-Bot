@@ -31,6 +31,8 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+# Change to whatever group name to be ignored
+GROUPTOBEIGNORED = ["Test group"]
 
 
 def initialize_driver():
@@ -80,7 +82,7 @@ def wait_for_user_reply(driver, timeout=30):
     a new reply has the same text as a previous message.
 
     Args:
-        driver: Selenium WebDriver instance
+
         timeout: Max time to wait for a response (default: 30 seconds)
 
     Returns:
@@ -133,8 +135,10 @@ def close_chat(driver):
         triple_dot_button.click()
         logging.info("Chat menu open!")
         time.sleep(1)
-        close_chat_button = driver.find_element(
-            By.XPATH, "//*[@aria-label='Close chat']")
+        close_chat_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//*[@aria-label='Close chat']"))
+        )
         logging.info("Closing chat....")
         close_chat_button.click()
         logging.info("Exited chat")
@@ -149,8 +153,7 @@ def check_login(driver, timeout=30):
     Checks if the login is successful by waiting for the presence of an element.
 
     Args:
-    driver: Selenium WebDriver instance
-    timeout: Maximum time to wait for the element to appear
+        timeout: Maximum time to wait for the element to appear
     """
     try:
         wait = WebDriverWait(driver, timeout)
@@ -186,10 +189,12 @@ def select_first_unread(driver):
     """
     try:
         logging.info("Looking for unread messages...")
-        unread_msg = driver.find_element(
-            By.XPATH, "/html/body/div[1]/div/div/div[3]/div/div[3]/div/div[3]/div[1]/div/div/div[1]/div/div")
+        unread_msg = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "/html/body/div[1]/div/div/div[3]/div/div[3]/div/div[3]/div[1]/div/div/div[1]/div/div"))
+        )
         unread_msg.click()
-        time.sleep(10)
+        time.sleep(8)
         return True
 
     except Exception:
@@ -202,7 +207,7 @@ def send_message(driver, message):
     Sends a message in the current chat
 
     Args:
-    message: The message to be sent out
+        message: The message to be sent out
     """
     try:
         logging.info("Looking for message input box...")
@@ -216,7 +221,7 @@ def send_message(driver, message):
         # Type and send message
         message_box.clear()
         message_box.send_keys(message)
-        time.sleep(3)
+        time.sleep(2)
         message_box.send_keys(Keys.ENTER)
         logging.info("Message sent!")
         return True
@@ -228,10 +233,10 @@ def send_message(driver, message):
 
 def send_message_as_p(driver, message):
     """
-    Sends a message in the current chat
+    Sends a message in the current chat in the form of a paragraph instead of individual messages
 
     Args:
-    message: The message to be sent out
+        message: An array of messages to be sent out
     """
     try:
         logging.info("Looking for message input box...")
@@ -247,7 +252,7 @@ def send_message_as_p(driver, message):
         for line in message:
             message_box.send_keys(line)
             message_box.send_keys(Keys.SHIFT, Keys.ENTER)
-        time.sleep(3)
+        time.sleep(1)
         message_box.send_keys(Keys.ENTER)
         logging.info("Message sent!")
         return True
@@ -262,7 +267,7 @@ def search(driver, contact_to_search):
     Search for a specific contact and open the conversation
 
     Args:
-    contact_to_search = Contact to search
+        contact_to_search = Contact to search
     """
     try:
         click_all_button(driver)
@@ -289,7 +294,7 @@ def search(driver, contact_to_search):
                 click_unread_button(driver)  # Close search if no results
                 return False
 
-            logging.info("Attempting to click the first search result...")
+            logging.info("Attempting to select matched result...")
             # Function that clicks on the first result
             select_first_search(driver)
             return True  # Success
@@ -342,28 +347,69 @@ def select_first_search(driver):
         logging.error({str(e)})
 
 
-def get_group_name(driver):
+def detect_conversation_type(driver):
     """
-    Extracts the contact details of the current chat, gets the name if the contact is saved, or the contact number if the contact is not saved
+    Detects if the current conversation is a group or personal chat.
 
     Returns:
-    The name of the current selected chat
+        str: "group" or "personal" depending on the type of conversation
     """
     try:
-        logging.info("Extracting contact details...")
-        name_element = driver.find_element(
+        # Check for group indicators first
+        group_indicators = driver.find_elements(
             By.XPATH, '//*[@id="main"]/header/div[2]/div[1]/div/span')
-        group_name = name_element.text
-        logging.info(f"Contact Number: {group_name}")
-        return group_name
 
-    except NoSuchElementException as e:
-        logging.error("Cannot find element", {str(e)})
-        return False
+        if group_indicators and len(group_indicators) > 0:
+            return "group"
 
-    except Exception:
-        logging.error(
-            "Couldn't fetch the phone number. It might be hidden or the XPath is outdated.")
+        # Check for personal chat indicators
+        personal_indicators = driver.find_elements(
+            By.XPATH, '//*[@id="main"]/header/div[2]/div/div/div/span')
+
+        if personal_indicators and len(personal_indicators) > 0:
+            return "personal"
+
+        # If neither is found, log and return unknown
+        logging.warning("Could not determine conversation type")
+        return "unknown"
+
+    except Exception as e:
+        logging.error(f"Error detecting conversation type: {str(e)}")
+        return "unknown"
+
+
+def get_chat_name(driver):
+    """
+    Gets the name of the current chat, whether group or personal.
+
+    Returns:
+        str: The name of the current chat or False if it cannot be determined
+    """
+    conv_type = detect_conversation_type(driver)
+
+    if conv_type == "group":
+        try:
+            name_element = driver.find_element(
+                By.XPATH, '//*[@id="main"]/header/div[2]/div[1]/div/span')
+            chat_name = name_element.text
+            logging.info(f"Group name: {chat_name}")
+            return chat_name
+        except Exception as e:
+            logging.error(f"Error getting group name: {str(e)}")
+            return False
+
+    elif conv_type == "personal":
+        try:
+            name_element = driver.find_element(
+                By.XPATH, '//*[@id="main"]/header/div[2]/div/div/div/span')
+            chat_name = name_element.text
+            logging.info(f"Contact name: {chat_name}")
+            return chat_name
+        except Exception as e:
+            logging.error(f"Error getting contact name: {str(e)}")
+            return False
+
+    else:
         return False
 
 
@@ -372,7 +418,7 @@ def get_contact_details(driver):
     Extracts the contact details of the current chat, gets the name if the contact is saved, or the contact number if the contact is not saved
 
     Returns:
-    The name of the current selected chat
+        The name of the current selected chat
     """
 
     try:
@@ -396,6 +442,14 @@ def get_contact_details(driver):
 def create_ticket(contact_details, issue_category, description):
     """
     Inserts a new ticket into the database.
+
+    Args:
+        contact_details: contact number or name,
+        issue_category: Type of issue
+        description: Brief description of the message
+
+    Returns:
+        The ticket number if ticket created successfully
     """
     conn = connect_to_db()
     if not conn:
@@ -437,16 +491,20 @@ def handle_conversation(driver):
     """
     Handles the initial conversation and directs the user accordingly.
     """
-    group_name = get_group_name(driver)
-    if group_name == "Test group":  # To be changed later to whatever contact/group to ignore
+
+    chat_name = get_chat_name(driver)
+    # Check if it's a group to be ignored
+    if chat_name in GROUPTOBEIGNORED:
+        logging.info(f"Ignoring group: {chat_name}")
         close_chat(driver)
+        return
     else:
-        MESSAGE = ("Thanks for contacting TH IT Support! Could you please let us know what you need help with?\n"
-                   " Reply 1️⃣ for a **new issue**\n"
-                   " Reply 2️⃣ for an **update on an existing issue**\n"
-                   " Reply 'exit' to cancel this request.\n")
+        MESSAGE = ["Thanks for contacting IT Support hotline! Could you please let us know what you need help with?",
+                   " Reply 1️⃣ for a **new issue**",
+                   " Reply 2️⃣ for an **update on an existing issue**",
+                   " Reply 'exit' to cancel this request.",]
         logging.info("Sending template msg to check if new or old issue")
-        send_message(driver, MESSAGE)
+        send_message_as_p(driver, MESSAGE)
 
         start_time = time.time()
         retries = 0
@@ -476,11 +534,15 @@ def handle_conversation(driver):
                 else:
                     retries += 1
                     if retries < MAX_RETRIES:
-                        send_message(
-                            driver, f"Invalid response. You have {MAX_RETRIES - retries} attempts left. Please reply '1' for a **new issue**, '2' for an **update**, or 'exit' to cancel.")
+                        send_message_as_p(
+                            driver, [
+                                f"Invalid response. You have {MAX_RETRIES - retries} attempts left.",
+                                " Please reply '1' for a **new issue**",
+                                "'2' for an **update**, or 'exit' to cancel."
+                            ])
                     else:
                         send_message(
-                            driver, "We couldn't understand your response. Please restart the conversation if you still need assistance.")
+                            driver, "I'm sorry I couldn't understand your response. You have reached the maximum retries. Please restart the conversation if you still need assistance.")
                         close_chat(driver)
                         logging.info(
                             "Conversation ended due to user sending messages in wrong format after max retries")
@@ -490,6 +552,7 @@ def handle_conversation(driver):
                 send_message(
                     driver, "We haven't received a response. Exiting chat...")
                 close_chat(driver)  # Close the chat if max retries exceeded
+                return
 
 
 MAX_RETRIES = 3
@@ -499,18 +562,18 @@ def handle_new_issue(driver):
     """
     Handle new issue flow while ensuring proper wait time for user response.
     """
-    MESSAGE = ("We apologize for any inconvenience caused. "
-               "Before going further, could you please tell us what kind of problem you are facing? \n"
-               "Please reply:\n"
-               "1️⃣ for **HARDWARE** Issues\n"
-               "2️⃣ for **NETWORK** Issues\n"
-               "3️⃣ for **ACCOUNT/PASSWORD** Issues\n"
-               "4️⃣ for **SOFTWARE** Issues\n"
-               "5️⃣ for **OTHERS**\n"
-               "or Type 'exit' to cancel this request.\n")
+    MESSAGE = ["We apologize for any inconvenience caused. \n",
+               "Before going further, could you please tell us what kind of problem you are facing?",
+               "Please reply:",
+               "1️⃣ for **HARDWARE** Issues",
+               "2️⃣ for **NETWORK** Issues",
+               "3️⃣ for **ACCOUNT/PASSWORD** Issues",
+               "4️⃣ for **SOFTWARE** Issues",
+               "5️⃣ for **OTHERS**",
+               "or Type 'exit' to cancel this request."]
 
     logging.info("Sending template msg to get category of issue")
-    send_message(driver, MESSAGE)
+    send_message_as_p(driver, MESSAGE)
 
     # Wait for and handle user reply
     retries = 0
@@ -551,10 +614,12 @@ def handle_new_issue(driver):
                                            description=issue_description)
 
                 if ticket_num:
-                    send_message(driver, "Thank you for providing the details.\n"
-                                         f"A ticket has been created for you.\n"
-                                         f"Your ticket number is #{ticket_num}.\n"
-                                         "Please wait while we arrange for IT support to contact you.\n")
+                    send_message_as_p(driver, [
+                        "Thank you for providing the details.",
+                        f"A ticket has been created for you.",
+                        f"Your ticket number is #{ticket_num}.",
+                        "Please wait while we arrange for IT support to contact you."
+                    ])
                 else:
                     send_message(
                         driver, "Sorry, we encountered an error while creating your ticket. Please try again later.")
@@ -574,12 +639,18 @@ def handle_new_issue(driver):
             else:
                 retries += 1
                 if retries < MAX_RETRIES:
-                    send_message(
-                        driver, f"Invalid response. You have {MAX_RETRIES - retries} attempts left. Please reply with '1' for **Hardware Issues**, '2' for **Network Issues**, '3' for **Account/Password Issues**, '4' for **Software Issues**, '5' for **Others** or 'exit' to cancel.")
+                    send_message_as_p(
+                        driver, [
+                            f"Invalid response. You have {MAX_RETRIES - retries} attempts left.",
+                            "Please reply with '1' for **Hardware Issues**",
+                            "'2' for **Network Issues**",
+                            "'3' for **Account/Password Issues**",
+                            "'4' for **Software Issues**",
+                            "'5' for **Others** or 'exit' to cancel."
+                        ])
                 else:
                     send_message(
-                        driver, "Sorry, we couldn't understand your response. Please restart the conversation if you need help.")
-                    close_chat(driver)
+                        driver, "Sorry but I still couldn't understand your response. You have reached maximum retries. Please restart the conversation to try again.")
                     logging.info("Conversation exited after max retries")
                     return  # Exit after max retries
 
@@ -605,7 +676,7 @@ def handle_existing_issue(driver, contact_num):
         query = "SELECT ticket_no FROM tickets WHERE contact_details = %s AND status = 'Ongoing'"
         cursor.execute(query, (contact_num,))
         tickets = cursor.fetchall()
-
+        logging.info("Checking DB for user's existing tickets")
         cursor.close()
         conn.close()
 
@@ -613,18 +684,19 @@ def handle_existing_issue(driver, contact_num):
             send_message(
                 driver, "You currently have no unresolved tickets. Let us know if you need further assistance.")
             close_chat(driver)
+            logging.info("Closed chat due to no existing ticket")
             return
 
         # Convert ticket numbers to strings and format with #
         ticket_numbers_list = [f"#{ticket['ticket_no']}" for ticket in tickets]
         ticket_numbers = ", ".join(ticket_numbers_list)
 
-        MESSAGE = (f"You currently have {len(tickets)} unresolved ticket(s): {ticket_numbers} \n"
-                   "Please reply with the ticket number you are referring to.\n"
-                   "Example: #003\n"
-                   "Reply 'exit' to cancel. \n")
-
-        send_message(driver, MESSAGE)
+        MESSAGE = [f"You currently have {len(tickets)} unresolved ticket(s): {ticket_numbers}",
+                   "Please reply with the ticket number you are referring to.",
+                   "Example: #003",
+                   "Reply 'exit' to cancel. \n"]
+        logging.info("Confirming which ticket with user")
+        send_message_as_p(driver, MESSAGE)
 
         retry_attempts = 3  # Allow up to 3 retries
 
@@ -639,11 +711,11 @@ def handle_existing_issue(driver, contact_num):
 
             if reply in ticket_numbers_list:
                 send_message(
-                    driver, f"Thank you! We are notifying IT support about your ticket {reply}.")
+                    driver, f"Thank you! We have notified IT support about your ticket {reply}. Help is on the way!")
 
                 # Notify support team
                 MESSAGE = [f"{contact_num} has asked for an update on ticket {reply}.",
-                           "Please check and assist them."]
+                           "Kindly check and assist them."]
                 close_chat(driver)
                 notify_group(driver, MESSAGE)
                 return  # Exit function after a successful match
@@ -651,13 +723,17 @@ def handle_existing_issue(driver, contact_num):
             else:
                 retry_attempts -= 1
                 if retry_attempts > 0:
-                    send_message(driver, f"The ticket number you provided is not found. Please try again ({retry_attempts} attempts left).\n"
-                                 "Example: #003\n"
-                                 "Reply 'exit' to cancel.")
+                    send_message_as_p(driver, [
+                        "The ticket number you provided is not found.",
+                        f"Please try again({retry_attempts} attempts left).",
+                        "Example: #003",
+                        "Reply 'exit' to cancel."])
                 else:
                     send_message(
-                        driver, "You have exceeded the maximum number of attempts. Please start over if you need assistance.")
+                        driver, "Sorry but you have exceeded the maximum number of attempts. Please start over if you need assistance.")
                     close_chat(driver)
+                    logging.info(
+                        "Chat exited due to user exceeded maximum attempts")
                     return
 
     except mysql.connector.Error as err:
@@ -676,6 +752,7 @@ def notify_group(driver, message):
     """
     Send notification to someone 
     """
+    logging.info("Notifying group....")
     GROUP_TO_NOTIFY = "Test group"
     if search(driver, GROUP_TO_NOTIFY):
         time.sleep(5)
@@ -718,7 +795,6 @@ def main():
                 if select_first_unread(driver):
                     # Process the conversation (your existing message handling code)
                     handle_conversation(driver)
-                    # click_unread_button(driver)
                     # After handling the conversation, check for unread messages again
                     logging.info("Checking for more unread messages...")
 
@@ -726,7 +802,6 @@ def main():
                     logging.info(
                         "No unread conversations found, waiting before next check...")
                     time.sleep(random.randint(2, 30))
-                    # click_unread_button(driver)
 
             except NoSuchElementException as e:
                 logging.error(f"Element not found: {str(e)}")
