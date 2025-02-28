@@ -2,6 +2,29 @@
 
 An automated WhatsApp Web bot that handles IT support requests and ticket management using Selenium WebDriver.
 
+## Disclaimer
+
+This project is a portfolio piece demonstrating my automation and software development capabilities. Please note:
+
+- This is an educational project and should be used responsibly
+- The code is provided "as-is" without any warranties or guarantees
+- This is not an officially supported WhatsApp product
+- Users must comply with WhatsApp's Terms of Service and policies
+- The developer is not responsible for any misuse or violations of WhatsApp's terms
+- All sensitive information, credentials, and company-specific implementations have been removed
+- This is a generic implementation with no proprietary business logic
+- The project should be used for learning purposes only
+- Always obtain proper authorization before deploying automated solutions in a production environment
+
+### WhatsApp Usage Notice
+
+Please be aware that WhatsApp's terms of service may have restrictions on automated or unofficial clients. Users should:
+
+- Review WhatsApp's current terms of service before implementation
+- Ensure compliance with WhatsApp's policies and guidelines
+- Use this code responsibly and at their own risk
+- Consider WhatsApp's Business API for production environments
+
 ## Features
 
 - Automated response to incoming WhatsApp messages
@@ -140,7 +163,3 @@ Common issues and solutions:
 - Selenium WebDriver for web automation
 - WhatsApp Web for the messaging platform
 - MySQL for database management
-
-## Disclaimer
-
-This bot is for educational purposes only. Please ensure you comply with WhatsApp's terms of service when using automated systems. The developer (Liou Jun Yi) not responsible for any misuse or violation of WhatsApp's terms of service.
