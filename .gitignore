@@ -10,11 +10,6 @@ test.py
 *.session-journal
 whatsapp_session/
 ```
-
-This will prevent any WhatsApp session data from being accidentally committed to your repository.
-
-Otherwise, your `.gitignore` is well-configured for a Python project and should keep your sensitive information safe when pushing to a public repository. Would you like me to help you make any other security-related changes?
-
 # Python
 __pycache__/
 *.py[cod]
