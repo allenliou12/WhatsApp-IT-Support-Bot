@@ -499,7 +499,7 @@ def handle_conversation(driver):
         close_chat(driver)
         return
     else:
-        MESSAGE = ["Thanks for contacting IT Support hotline! Could you please let us know what you need help with?",
+        MESSAGE = ["Welcome to IT Support via WhatsApp! Could you please let us know what you need help with?",
                    " Reply 1️⃣ for a **new issue**",
                    " Reply 2️⃣ for an **update on an existing issue**",
                    " Reply 'exit' to cancel this request.",]
@@ -618,7 +618,7 @@ def handle_new_issue(driver):
                         "Thank you for providing the details.",
                         f"A ticket has been created for you.",
                         f"Your ticket number is #{ticket_num}.",
-                        "Please wait while we arrange for IT support to contact you."
+                        "Our team will reach out shortly."
                     ])
                 else:
                     send_message(
