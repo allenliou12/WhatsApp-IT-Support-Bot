@@ -31,7 +31,7 @@ An automated WhatsApp Web bot that handles IT support requests and ticket manage
 1. Clone the repository
 
 ```bash
-git clone https://github.com/allenliou12/WhatsApp-Bot
+git clone https://github.com/allenliou12/WhatsApp-IT-Support-Bot
 cd WhatsApp-Bot
 ```
 
