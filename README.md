@@ -4,17 +4,19 @@ An automated WhatsApp Web bot that handles IT support requests and ticket manage
 
 ## Disclaimer
 
-This project is a portfolio piece demonstrating my automation and software development capabilities. Please note:
+This project was originally developed as part of my professional work and has been sanitized and generalized for portfolio purposes. It demonstrates automation and software development capabilities using WhatsApp Web automation. Please note:
 
-- This is an educational project and should be used responsibly
+- This is a sanitized version of a work project, modified for educational purposes
+- All proprietary code, business logic, and company-specific implementations have been removed
 - The code is provided "as-is" without any warranties or guarantees
 - This is not an officially supported WhatsApp product
 - Users must comply with WhatsApp's Terms of Service and policies
-- The developer is not responsible for any misuse or violations of WhatsApp's terms
-- All sensitive information, credentials, and company-specific implementations have been removed
-- This is a generic implementation with no proprietary business logic
-- The project should be used for learning purposes only
-- Always obtain proper authorization before deploying automated solutions in a production environment
+- The developer and the original employer are not responsible for any misuse or violations
+- This implementation is generic and contains no proprietary information
+- The project should be used for learning and educational purposes only
+- Always obtain proper authorization before deploying automated solutions
+- Users should thoroughly test in a non-production environment first
+- Consider using WhatsApp's Business API for production implementations
 
 ### WhatsApp Usage Notice
 
